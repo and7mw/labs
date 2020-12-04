@@ -236,8 +236,10 @@ void add() {
 int main() {
     try {
         platformInfo();
-        /*print();
-        add();*/
+        std::cout << std::endl;
+        print();
+        std::cout << std::endl;
+        add();
     } catch (const std::exception& e) {
         std::cout << e.what() << std::endl;
     }
