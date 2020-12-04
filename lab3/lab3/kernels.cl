@@ -44,21 +44,31 @@ __kernel void optGemm(__global float *in1, __global float *in2, __global float *
     out[globalRow * col2 + globalCol] = acc;
 }
 
-__constant sampler_t Sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
+__constant sampler_t Sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_LINEAR;
 __kernel void imageGemm(__read_only image2d_t in1, __read_only image2d_t in2, __write_only image2d_t out,
                          unsigned int col1, unsigned int row1, unsigned int col2, unsigned int row2) {
     unsigned int row = get_global_id(0);
     unsigned int col = get_global_id(1);
 
-    int2 coordinates = (int2)(row, col); 
+    if (row == 0 && col == 0) {
+        for (int row = 0; row < row1; row++) {
+            for (int col = 0; col < col1; col++) {
+                int2 coordIn1 = (int2)(row, col);
+                float4 currentElIn1 = read_imagef(in1, Sampler, coordIn1);
+                printf("%d %d %d %d | ", currentElIn1.x, currentElIn1.y, currentElIn1.z, currentElIn1.w);
+            }
+            printf("\n");
+        }
+    }
+    /*int2 coordinates = (int2)(row, col); 
     printf("COORD: %d %d \n", coordinates.x, coordinates.y);
-    int2 coordIn1 = (int2)(row, 0);
-    int2 coordIn2 = (int2)(0, col);
+    int2 coordIn1 = (int2)(0, 0);
+    int2 coordIn2 = (int2)(0, 0);
     float4 currentElIn1 = read_imagef(in1, Sampler, coordIn1);
     float4 currentElIn2 = read_imagef(in2, Sampler, coordIn2);
     printf("IN1: %d %d %d %d\n", currentElIn1.x, currentElIn1.y, currentElIn1.z, currentElIn1.w);
     printf("IN2: %d %d %d %d\n", currentElIn2.x, currentElIn2.y, currentElIn2.z, currentElIn2.w);
-    printf("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n");
+    printf("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n");*/
 
     /*if (row < row1 && col < col2) {
         float4 currentElIn1 = (float4)(0,0,0,0); 

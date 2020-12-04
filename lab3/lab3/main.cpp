@@ -87,7 +87,8 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
         desc.image_width = col1;
         desc.image_height = row1;
 
-        in1 = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, nullptr, &retCode);
+        void* ptr = const_cast<float*>(_in1.data());
+        in1 = clCreateImage(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, &format, &desc, ptr, &retCode);
     }
     else {
         throw std::runtime_error("Unsupported buffer type");
@@ -109,7 +110,8 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
         desc.image_width = col2;
         desc.image_height = row2;
 
-        in2 = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, nullptr, &retCode);
+        void* ptr = const_cast<float*>(_in2.data());
+        in2 = clCreateImage(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, &format, &desc, ptr, &retCode);
     }
     else {
         throw std::runtime_error("Unsupported buffer type");
@@ -143,16 +145,16 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
         if (clEnqueueWriteBuffer(queue, in2, CL_TRUE, 0, sizeof(float) * _in2.size(), _in2.data(), 0, NULL, NULL) != CL_SUCCESS)
             throw std::runtime_error("Can't write to in2 BUFFER");
     } else if (bt == bufferType::IMAGE) {
-        const size_t origin[3]{ 0, 0, 0 };
+        /*const size_t origin[3]{ 0, 0, 0 };
         const size_t region1[3]{col1, row1, 1};
-        retCode = clEnqueueWriteImage(queue, in1, CL_TRUE, origin, region1, 0, 0, _in1.data(), 0, nullptr, nullptr);
-        if (retCode != CL_SUCCESS)
+        retCode = clEnqueueWriteImage(queue, in1, CL_TRUE, origin, region1, sizeof(float) * col1, 0, _in1.data(), 0, nullptr, nullptr);
+        if (retCode != CL_SUCCES2, 1 };
+        retCode = clEnqueueWriteImage(queue, in2, CL_TRUE, origin, region2, sizeof(float) * col2, 0, _in2.data(), 0, nullptr, nullptr);
+        if (retCode != CL_SUCCESS)S)
             throw std::runtime_error("Can't write to in1 IMAGE " + std::to_string(retCode));
 
-        const size_t region2[3]{ col2, row2, 1 };
-        retCode = clEnqueueWriteImage(queue, in2, CL_TRUE, origin, region2, 0, 0, _in2.data(), 0, nullptr, nullptr);
-        if (retCode != CL_SUCCESS)
-            throw std::runtime_error("Can't write to in2 IMAGE " + std::to_string(retCode));
+        const size_t region2[3]{ col2, row
+            throw std::runtime_error("Can't write to in2 IMAGE " + std::to_string(retCode));*/
     } else {
         throw std::runtime_error("Unsupported buffer type for writing");
     }
