@@ -52,6 +52,10 @@ void getDevice(const cl_platform_id& platform, const cl_device_type& dt, cl_devi
 
     if (clGetDeviceIDs(platform, dt, numDevices, &device, NULL) != CL_SUCCESS)
         throw std::runtime_error("Can't get devices");
+    /*size_t ret = 0;
+    if (clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(ret), &ret, NULL) != CL_SUCCESS)
+        throw std::runtime_error("Can't get devices CL_DEVICE_MAX_WORK_GROUP_SIZE");
+    std::cout << "CL_DEVICE_MAX_WORK_GROUP_SIZE: " << ret << std::endl;*/
 }
 
 void createContext(const cl_platform_id& platform, const cl_device_id& device, cl_context& context) {
@@ -86,14 +90,15 @@ void createProgramAndKernel(const cl_context& context, const cl_device_id& devic
 }
 
 void compare(const std::vector<float>& res1, const std::vector<float>& res2) {
-    if (res1.size() != res2.size())
-        throw std::runtime_error("Vectors have different size");
+    if (res1.size() != res2.size()) {
+        std::cout << "Vectors have different size" << std::endl;
+        return;
+    }
     for (size_t i = 0; i < res1.size(); i++) {
         if (std::abs(res1[i] - res2[i]) > 0.01f) {
             std::cout << "Different result on res1: " << res1[i] << " and res2: " << res2[i] << " on idx: " << i << std::endl;
             return;
         }
     }
-    
 }
 

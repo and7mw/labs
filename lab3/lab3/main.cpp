@@ -5,7 +5,7 @@
 
 #include "opencl_utils.hpp"
 
-#define BLOCK_SIZE 2
+#define BLOCK_SIZE 16
 
 std::vector<float> getMatrix(const int& size) {
     std::vector<float> resVector(size);
@@ -18,6 +18,35 @@ std::vector<float> getMatrix(const int& size) {
         resVector[i] = dist(gen);
 
     return resVector;
+}
+
+std::vector<float> reference(const std::vector<float>& A, const std::vector<float>& B,
+                             const unsigned int col1, const unsigned int row1, const unsigned int col2, const unsigned int row2) {
+    if (A.size() != B.size()) {
+        throw std::runtime_error("Cant mult matrix");
+    }
+
+    size_t workAmount = row1 * col2;
+    std::vector<float> C(workAmount);
+    const float* in1 = A.data();
+    const float* in2 = B.data();
+    float* out = C.data();
+    memset(out, 0, C.size() * sizeof(float));
+    double start = omp_get_wtime();
+    for (size_t id = 0; id < workAmount; id++) {
+        size_t col = id % col2;
+        size_t row = id / col2;
+
+        const float* inA = in1 + col1 * row;
+        const float* inB = in2 + col;
+
+        for (unsigned int i = 0; i < col1; i++) {
+            out[id] += inA[i] * inB[i * col2];
+        }
+    }
+    double end = omp_get_wtime();
+    std::cout << "Reference execution time: " << (end - start) << std::endl;
+    return C;
 }
 
 void computeOMP(const std::vector<float>& _in1, const std::vector<float>& _in2, std::vector<float>& _out,
@@ -155,8 +184,12 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
     size_t globalWorkSize[]{row1, col2};
     size_t localWorkSize[]{ BLOCK_SIZE, BLOCK_SIZE };
     double start = omp_get_wtime();
-    if (clEnqueueNDRangeKernel(queue, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, NULL) != CL_SUCCESS)
-        throw std::runtime_error("Can't run kernel execution");
+    retCode = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, NULL);
+    if (retCode != CL_SUCCESS) {
+        std::string err = "Can't run kernel execution: " + std::to_string(retCode);
+        throw std::runtime_error(err);
+    }
+        
     cl_int ret = clFinish(queue);
     double end = omp_get_wtime();
     std::cout << "Execution time: " << (end - start) << std::endl;
@@ -176,12 +209,14 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
 }
 
 int main() {
-    const unsigned int col1 = 4;
-    const unsigned int row1 = 4;
-    const unsigned int col2 = 4;
-    const unsigned int row2 = 4;
+    const unsigned int col1 = 1024;
+    const unsigned int row1 = 1024;
+    const unsigned int col2 = 1024;
+    const unsigned int row2 = 1024;
     const std::vector<float> in1 = getMatrix(col1 * row1);
     const std::vector<float> in2 = getMatrix(col2 * row2);
+
+    //std::vector<float> ref = reference(in1, in2, col1, row1, col2, row2);
 
     try {
         cl_device_type deviceTypeGPU = CL_DEVICE_TYPE_GPU;
@@ -192,63 +227,81 @@ int main() {
         readKernelFile(kernelText);
         kernelText.push_back(0);
 
-        std::cout << "MATRIX 1" << std::endl;
-        for (size_t row = 0; row < row1; row++) {
-            for (size_t col = 0; col < col1; col++) {
-                std::cout << in1[row * col1 + col] << " ";
-            }
-            std::cout << std::endl;
-        }
-        std::cout << std::endl;
-        std::cout << "MATRIX 2" << std::endl;
-        for (size_t row = 0; row < row2; row++) {
-            for (size_t col = 0; col < col2; col++) {
-                std::cout << in2[row * col2 + col] << " ";
-            }
-            std::cout << std::endl;
-        }
-        std::cout << std::endl;
-
         // Task 1
-        /*{
+        // GPU
+        {
+            std::vector<float> out;
+            std::cout << "Slow simple GEMM GPU" << std::endl;
+            computeOnDevice(platform, deviceTypeGPU, kernelText, "slowSimpleGemm", in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
+        }
+        {
+            std::vector<float> out;
+            std::cout << "Simple GEMM GPU" << std::endl;
+            computeOnDevice(platform, deviceTypeGPU, kernelText, "simpleGemm", in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
+        }
+        // CPU
+        {
             std::vector<float> out;
             std::cout << "Simple GEMM CPU" << std::endl;
             computeOnDevice(platform, deviceTypeCPU, kernelText, "simpleGemm", in1, in2, out, col1, row1, col2, row2);
-        }*/
-        std::vector<float> out1;
-        {
-            //std::vector<float> out;
-            std::cout << "Simple GEMM GPU" << std::endl;
-            computeOnDevice(platform, deviceTypeGPU, kernelText, "simpleGemm", in1, in2, out1, col1, row1, col2, row2);
+            //compare(ref, out);
         }
-        /*{
+        std::cout << std::endl << std::endl;
+        {
             std::vector<float> out;
             std::cout << "Simple GEMM Open MP" << std::endl;
             computeOMP(in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
         }
-        std::cout << std::endl;*/
+        std::cout << std::endl << std::endl;
 
         // Task 2
-        /*{
+        // GPU
+        {
             std::vector<float> out;
-            std::cout << "Opt GEMM CPU" << std::endl;
-            computeOnDevice(platform, deviceTypeCPU, kernelText, "optGemm", in1, in2, out, col1, row1, col2, row2);
+            std::cout << "Slow opt GEMM GPU" << std::endl;
+            computeOnDevice(platform, deviceTypeGPU, kernelText, "slowOptGemm", in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
         }
         {
             std::vector<float> out;
             std::cout << "Opt GEMM GPU" << std::endl;
             computeOnDevice(platform, deviceTypeGPU, kernelText, "optGemm", in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
         }
-        std::cout << std::endl;*/
+        // CPU
+        {
+            std::vector<float> out;
+            std::cout << "Opt GEMM CPU" << std::endl;
+            computeOnDevice(platform, deviceTypeCPU, kernelText, "optGemm", in1, in2, out, col1, row1, col2, row2);
+            //compare(ref, out);
+        }
+        std::cout << std::endl << std::endl;
 
         // Task 3
-        std::vector<float> out2;
+        // GPU
         {
-            //std::vector<float> out;
-            std::cout << "Image GEMM GPU" << std::endl;
-            computeOnDevice(platform, deviceTypeGPU, kernelText, "imageGemm", in1, in2, out2, col1, row1, col2, row2, bufferType::IMAGE);
+            std::vector<float> out;
+            std::cout << "Slow image GEMM GPU" << std::endl;
+            computeOnDevice(platform, deviceTypeGPU, kernelText, "slowImageGemm", in1, in2, out, col1, row1, col2, row2, bufferType::IMAGE);
+            //compare(ref, out);
         }
-        compare(out1, out2);
+        {
+            std::vector<float> out;
+            std::cout << "Image GEMM GPU" << std::endl;
+            computeOnDevice(platform, deviceTypeGPU, kernelText, "imageGemm", in1, in2, out, col1, row1, col2, row2, bufferType::IMAGE);
+            //compare(ref, out);
+        }
+        // CPU
+        {
+            std::vector<float> out;
+            std::cout << "Image GEMM CPU" << std::endl;
+            computeOnDevice(platform, deviceTypeCPU, kernelText, "imageGemm", in1, in2, out, col1, row1, col2, row2, bufferType::IMAGE);
+            //compare(ref, out);
+        }
+        
 
     } catch (const std::exception &e) {
         std::cout << e.what() << std::endl;
