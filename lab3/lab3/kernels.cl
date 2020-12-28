@@ -89,25 +89,8 @@ __kernel void optGemm(__global float *in1, __global float *in2, __global float *
 
     out[globalRow * col2 + globalCol] = acc;
 }
- 
-__kernel void slowImageGemm(__read_only image2d_t in1, __read_only image2d_t in2, __global float *out,
-                            unsigned int col1, unsigned int row1, unsigned int col2, unsigned int row2) {
-    unsigned int row = get_global_id(0);
-    unsigned int col = get_global_id(1);
-    
-    if (row < row1 && col < col2) {
-        float acc = 0.0f;
 
-        for (int i = 0; i < col1; i++) {
-            int2 coordIn1 = (int2)(i, row); 
-            int2 coordIn2 = (int2)(col, i);
-            acc += read_imagef(in1, coordIn1).x * read_imagef(in2, coordIn2).x;
-        }
-        out[row * col2 + col] = acc;
-    }
-}
-
-__kernel void imageGemm(__read_only image2d_t in1, __read_only image2d_t in2, __global float *out,
+__kernel void imageGemm(__read_only image2d_t in1, __read_only image2d_t in2, __write_only image2d_t out,
                         unsigned int col1, unsigned int row1, unsigned int col2, unsigned int row2) {
     #define BLOCK_SIZE 16
     const int row = get_local_id(1);
@@ -138,5 +121,6 @@ __kernel void imageGemm(__read_only image2d_t in1, __read_only image2d_t in2, __
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 
-    out[globalRow * col2 + globalCol] = acc;
+    int2 coordOut = (int2)(globalCol, globalRow);
+    write_imagef(out, coordOut, acc);
 }

@@ -142,9 +142,25 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
     if (retCode != CL_SUCCESS)
         throw std::runtime_error("Can't create in2 buffer");
 
-    cl_mem out = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * row1 * col2, NULL, &retCode);
-    if (retCode != CL_SUCCESS)
-        throw std::runtime_error("Can't create out buffer");
+    cl_mem out{};
+    if (bt == bufferType::BUFFER) {
+        out = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * row1 * col2, NULL, &retCode);
+        if (retCode != CL_SUCCESS)
+            throw std::runtime_error("Can't create out buffer");
+    } else if (bt == bufferType::IMAGE) {
+        cl_image_format format{};
+        format.image_channel_order = CL_R;
+        format.image_channel_data_type = CL_FLOAT;
+        cl_image_desc desc{};
+        memset(&desc, 0, sizeof(desc));
+        desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+        desc.image_width = col2;
+        desc.image_height = row1;
+
+        out = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, nullptr, &retCode);
+    } else {
+        throw std::runtime_error("Unsupported buffer type");
+    }
 
     if (bt == bufferType::BUFFER) {
         if (clEnqueueWriteBuffer(queue, in1, CL_TRUE, 0, sizeof(float) * _in1.size(), _in1.data(), 0, NULL, NULL) != CL_SUCCESS)
@@ -195,9 +211,17 @@ void computeOnDevice(const cl_platform_id& platform, const cl_device_type device
     std::cout << "Execution time: " << (end - start) << std::endl;
 
     _out.resize(row1 * col2);
-    if (clEnqueueReadBuffer(queue, out, CL_TRUE, 0, sizeof(float) * row1 * col2, _out.data(), 0, NULL, NULL) != CL_SUCCESS)
-        throw std::runtime_error("Can't read from buffer");
-
+    if (bt == bufferType::BUFFER) {
+        if (clEnqueueReadBuffer(queue, out, CL_TRUE, 0, sizeof(float) * row1 * col2, _out.data(), 0, NULL, NULL) != CL_SUCCESS)
+            throw std::runtime_error("Can't read from buffer");
+    } else if (bt == bufferType::IMAGE) {
+        const size_t origin[3]{ 0, 0, 0 };
+        const size_t region1[3]{ col2, row1, 1 };
+        if (clEnqueueReadImage(queue, out, CL_TRUE, origin, region1, 0, 0, _out.data(), 0, NULL, NULL) != CL_SUCCESS)
+            throw std::runtime_error("Can't read from image");
+    } else {
+        throw std::runtime_error("Unsupported buffer type for writing");
+    }
 
     clReleaseMemObject(in1);
     clReleaseMemObject(in2);
@@ -282,12 +306,6 @@ int main() {
 
         // Task 3
         // GPU
-        {
-            std::vector<float> out;
-            std::cout << "Slow image GEMM GPU" << std::endl;
-            computeOnDevice(platform, deviceTypeGPU, kernelText, "slowImageGemm", in1, in2, out, col1, row1, col2, row2, bufferType::IMAGE);
-            //compare(ref, out);
-        }
         {
             std::vector<float> out;
             std::cout << "Image GEMM GPU" << std::endl;
